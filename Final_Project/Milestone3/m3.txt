@@ -1,0 +1,1167 @@
+Script started on Sun 13 Aug 2017 10:22:06 PM EDT
+nesmaeili@matrix:~/oop345/milestones/m3> whoami
+nesmaeili
+nesmaeili@matrix:~/oop345/milestones/m3> cat  m3.cpp Item.cpp CustomerOrder.cpp CustomerItem.cpp ItemManager.cpp OrderManag er.cpp Task.cpp TaskManager.cpp Utilities.cpp
+// Manager Milestone - Main Program
+// Milestome_3.cpp
+// Chris Szalwinski
+// v1.0 - 16/11/2015
+// v2.0 - 15/01/2016
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <memory>
+#include "Task.h"
+#include "TaskManager.h"
+#include "CustomerOrder.h"
+#include "OrderManager.h"
+#include "Item.h"
+#include "ItemManager.h"
+#include "Utilities.h"
+
+template<typename M, typename T>
+void loadFromFile(const char*, M&, std::ostream&);
+template<>
+void loadFromFile<TaskManager, Task>(const char*, TaskManager&, std::ostream&);
+
+int main(int argc, char** argv) {
+	// process command line arguments
+	if (argc != 5) {
+		std::cerr << "*** invalid number of arguments ***\n"
+			<< "Usage: " << argv[0] << " tasks_file order_file item_file delimiter\n";
+		exit(1);
+	}
+	std::cout << "Command Line Arguments\n----------------------\n";
+	std::cout << "Task File Specified           = " << argv[1] << "\n";
+	std::cout << "Customer Order File Specified = " << argv[2] << "\n";
+	std::cout << "Item File Specified           = " << argv[3] << "\n";
+	std::cout << "File Record Field Delimiter   = " << argv[4][0] << "\n\n";
+	Utilities::setDelimiter(argv[4][0]);
+	// end of command line processing
+
+	// Load, accept, validate and display the Tasks
+	//
+	std::cout << "Building the Network of Tasks\n-----------------------------\n";
+	TaskManager taskManager;
+	loadFromFile<TaskManager, Task>(argv[1], taskManager, std::cerr);
+	taskManager.display(std::cout);
+	std::cout << "\nValidating the Set of Tasks\n---------------------------\n";
+	taskManager.validate(std::cerr);
+	std::cout << "\nList of Accepted Tasks\n----------------------\n";
+	taskManager.display(std::cout);
+
+	// Load, accept and display the Customer Orders
+	//
+	std::cout << "\n*** Load and Accept the Customer Orders ***\n";
+	OrderManager orderManager;
+	loadFromFile<OrderManager, CustomerOrder>(argv[2], orderManager, std::cerr);
+	std::cout << "\nList of Accepted Customer Orders\n--------------------------------\n";
+	orderManager.display(std::cout);
+
+	// Load, accept and display the Items in Stock
+	//
+	std::cout << "\n*** Load and accept the Items in Stock ***\n";
+	ItemManager itemManager;
+	loadFromFile<ItemManager, Item>(argv[3], itemManager, std::cerr);
+	std::cout << "\nList of In-Stock Items\n----------------------\n";
+	itemManager.display(std::cout, true);
+
+	// Validate the Items in the Customer Orders
+	orderManager.validate(itemManager, std::cout);
+
+	// Validate the Tasks in each Item in Stock
+	taskManager.validate(itemManager, std::cerr);
+
+	// Fill the Customer Orders with the Items in Stock
+	std::cout << "\n*** Fill the Customer Orders ***\n";
+	for (auto i = itemManager.begin(); i != itemManager.end(); i++) {
+		for (auto s = orderManager.begin(); s != orderManager.end(); s++)
+			s->fill(*i);
+	}
+
+	// Display the Processed Customer Orders
+	std::cout << "\nList of Processed Customer Orders\n---------------------------------\n";
+	orderManager.display(std::cout);
+
+	// Terminate
+	std::cout << "\nDone!\nPress Enter Key to Exit ... ";
+	char c;
+	std::cin.get(c);
+}
+
+template<typename M, typename T>
+void loadFromFile(const char* fileName, M& manager, std::ostream& os) {
+	std::ifstream file(fileName);
+	if (!file) {
+		os << "*** Cannot open file named " << fileName << " ***\n";
+		exit(1);
+	}
+	while (file) {
+		std::string record;
+		std::getline(file, record);
+		if (file) {
+			try {
+				std::unique_ptr<T> entry(new T(record));
+				if (!entry->empty())
+					manager.push_back(std::move(*entry));
+			}
+			catch (const std::string& msg) {
+				os << msg << std::endl;
+			}
+		}
+	}
+}
+
+template<>
+void loadFromFile<TaskManager, Task>(const char* fileName, TaskManager& manager, std::ostream& os) {
+	std::ifstream file(fileName);
+	if (!file) {
+		os << "*** Cannot open file named " << fileName << " ***\n";
+		exit(1);
+	}
+	while (file) {
+		std::string record;
+		std::getline(file, record);
+		if (file) {
+			try {
+				std::unique_ptr<Task> entry(new Task(record));
+				if (!entry->getName().empty())
+					manager.push_back(std::move(*entry));
+			}
+			catch (const std::string& msg) {
+				os << msg << std::endl;
+			}
+		}
+	}
+}
+/*************************
+* OOP345 - Milestone 2
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 08, 2017
+*************************/
+
+#include <iostream>
+#include <iomanip>
+#include "Item.h"
+#include "Utilities.h"
+
+size_t Item::field_width;
+
+Item::Item(const std::string& item)
+	: description("no deatiled description"), 
+	code(1)
+{
+	Utilities tokenExtract;
+	size_t next_pos = 0;
+	bool more = true;
+	name = tokenExtract.nextToken(item, next_pos, more);
+
+	if (field_width < tokenExtract.getFieldWidth())
+	{
+		field_width = tokenExtract.getFieldWidth();
+	}
+
+	if (name.empty() || filler.empty() || remover.empty())
+	{
+		throw std::string("***No Token found before the delimiter ***");
+	}
+
+	try 
+	{
+		if (more) { filler = tokenExtract.nextToken(item, next_pos, more); }
+		if (more) { remover = tokenExtract.nextToken(item, next_pos, more); }
+		if (more) { code = stoi(tokenExtract.nextToken(item, next_pos, more)); }
+		if (more) { description = tokenExtract.nextToken(item, next_pos, more); }
+	}
+	catch (...) 
+	{
+		throw std::string(item + " <-- *** no token found before the delimiter ***");
+	}
+
+	if (name.empty() || filler.empty() || remover.empty()) 
+	{
+		throw std::string("***No Token found before the delimiter ***"); 
+	}
+}
+
+bool Item::empty() const 
+{
+	return (name == "") ? true : false;
+}
+
+Item& Item::operator++(int n) 
+{
+	code++;
+}
+
+unsigned int Item::getCode() const 
+{
+	return code;
+}
+
+const std::string& Item::getName() const 
+{
+	return name;
+}
+
+const std::string& Item::getFiller() const 
+{
+	return filler;
+}
+
+const std::string& Item::getRemover() const 
+{
+	return remover;
+}
+
+void Item::display(std::ostream& os, bool full) const 
+{
+	os << std::setfill(' ');
+	os << std::setw(field_width) << std::left << name << "[" << std::right << std::setw(CODE_WIDTH) << std::setfill('0') << code << "] From " <<
+		std::setw(field_width) << std::left << std::setfill(' ') << filler << " To " << remover << std::endl <<
+		std::setw(field_width + CODE_WIDTH + 3) << std::right << ": " << description << std::endl;
+}/*************************
+* OOP345 - Milestone 2
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 08, 2017
+*************************/
+
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+#include "CustomerOrder.h"
+#include "CustomerItem.h"
+#include "Item.h"
+#include "Utilities.h"
+
+size_t CustomerOrder::field_width;
+
+CustomerOrder::CustomerOrder(const std::string& custOrder) 
+{
+	nOrders = 0; 
+	order = nullptr;
+	Utilities TokenExtract;
+	std::vector<std::string> token;
+	size_t next_pos = 0;
+	bool more = true;
+	for (unsigned int counter = 0; more; counter++) 
+	{
+		name = TokenExtract.nextToken(custOrder, next_pos, more);
+
+		if (more)
+		{
+			product = TokenExtract.nextToken(custOrder, next_pos, more);
+		}
+
+		while (more)
+		{
+			token.push_back(TokenExtract.nextToken(custOrder, next_pos, more));
+		}
+		order = new CustomerItem[token.size()];
+
+		for (unsigned int i = 0; i < token.size(); i++)
+		{
+			order[i] = CustomerItem(token[i]);
+		}
+
+		if (field_width < TokenExtract.getFieldWidth())
+		{
+			field_width = TokenExtract.getFieldWidth();
+		}
+		nOrders = token.size();
+	}
+}
+
+CustomerOrder::CustomerOrder(const CustomerOrder& pCustOrder) 
+{
+	throw std::string("Test");
+}
+
+CustomerOrder::CustomerOrder(CustomerOrder&& pCustOrder) NOEXCEPT
+	: name(pCustOrder.name),
+	product(pCustOrder.product),
+	nOrders(pCustOrder.nOrders)
+{
+	order = new CustomerItem[nOrders];
+
+	for (unsigned int i = 0; i < nOrders; i++)
+	{
+		order[i] = pCustOrder.order[i];
+	}
+	pCustOrder.order = nullptr;
+	pCustOrder.name = ""; pCustOrder.product = ""; pCustOrder.nOrders = 0;
+}
+
+CustomerOrder&& CustomerOrder::operator=(CustomerOrder&& pCustOrder)NOEXCEPT 
+{
+	if (this != &pCustOrder)
+	{
+		delete[] order;
+		name = pCustOrder.name; product = pCustOrder.product; nOrders = pCustOrder.nOrders;
+		order = pCustOrder.order;
+		pCustOrder.order = nullptr;
+		pCustOrder.name = ""; pCustOrder.product = ""; pCustOrder.nOrders = 0;
+	}
+	return std::move(*this);
+}
+
+CustomerOrder::~CustomerOrder() 
+{
+	delete[] order;
+}
+
+bool CustomerOrder::empty() const 
+{
+	return (order == nullptr) ? true : false;
+}
+
+unsigned int CustomerOrder::noOrders() const
+{
+	return nOrders;
+}
+
+const std::string& CustomerOrder::operator[](unsigned int i) const
+{
+	try
+	{
+		std::string rName;
+		rName = order[i].getName();
+	}
+	catch (...)
+	{
+	}
+	return name;
+}
+
+void CustomerOrder::fill(Item& item)
+{
+	for (unsigned int i = 0; i < nOrders; i++)
+	{
+		if (order[i].asksFor(item))
+		{
+			order[i].fill(item.getCode());
+			item++;
+		}
+	}
+}
+
+void CustomerOrder::remove(Item& item)
+{
+	for (unsigned int i = 0; i < nOrders; i++)
+	{
+		if (order[i].getName() == item.getName())
+		{
+			nOrders--;
+		}
+	}
+}
+
+void CustomerOrder::display(std::ostream& os) const 
+{
+	os << std::setw(field_width) << std::setfill(' ') << std::left << name << " :  " << product << std::endl;
+
+	for (unsigned int i = 0; i < nOrders; i++)
+		order[i].display(os);
+}/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 08, 2017
+*************************/
+
+#include <iomanip>
+#include <iostream>
+#include "CustomerItem.h"
+#include "Item.h"
+
+CustomerItem::CustomerItem(const std::string& pName) 
+{
+	name = "";
+	if (!pName.empty()) 
+		name = pName;
+	filled = false; code = 0;
+}
+
+bool CustomerItem::asksFor(const Item& item) const 
+{
+	return name == item.getName() ? true : false;
+}
+
+bool CustomerItem::isFilled() const 
+{
+	return filled;
+}
+
+void CustomerItem::fill(const unsigned int fill) 
+{
+	code = fill; 
+	filled = true;
+}
+
+void CustomerItem::clear() 
+{
+	code = 0; 
+	filled = false;
+}
+
+const std::string& CustomerItem::getName() const 
+{
+	return name;
+}
+
+void CustomerItem::display(std::ostream& os) const 
+{
+	if (isFilled())
+		os << " + ";
+	else 
+		os << " - ";
+	os << "[" << std::setw(CODE_WIDTH) << std::setfill('0') << std::right << code << "]  " << name << std::endl;
+}
+/*************************
+* OOP345 - Milestone 3
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 11, 2017
+*************************/
+#include "ItemManager.h"
+
+
+void ItemManager::display(std::ostream& os, bool fullDesc) const 
+{
+	for (size_t i = 0; i < std::vector<Item>::size(); i++) 
+	{
+		std::vector<Item>::at(i).display(os);
+	}
+}/*************************
+* OOP345 - Milestone 3
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 11, 2017
+*************************/
+
+#include <algorithm>
+#include "CustomerOrder.h"
+#include "ItemManager.h"
+#include "OrderManager.h"
+
+void OrderManager::validate(const ItemManager& itemManager, std::ostream& os) 
+{
+
+	for (size_t i = 0; i < std::vector<CustomerOrder>::size(); i++) 
+	{
+		for (size_t g = 0; g < std::vector<CustomerOrder>::at(i).noOrders(); g++) 
+		{
+			for (size_t n = 0; n < itemManager.size(); n++) 
+			{ 
+				if (std::vector<CustomerOrder>::at(i)[g] == itemManager.at(n).getName()) 
+				{ 
+					break; 
+				}
+				if (n == itemManager.size() - 1) 
+				{ 
+					std::cout << std::vector<CustomerOrder>::at(i)[g] << " is unavailable." << std::endl; 
+				} 
+			}
+		}
+	}
+}
+	
+void OrderManager::display(std::ostream& os) const 
+{
+		for (size_t i = 0; i < std::vector<CustomerOrder>::size(); i++) 
+		{
+			std::vector<CustomerOrder>::at(i).display(os);
+		}
+}/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 02, 2017
+*************************/
+
+#include <iomanip>
+#include <stdio.h>
+#include <string.h>
+#include "Task.h"
+#include "Utilities.h"
+
+
+size_t Task::field_width;
+
+Task::Task(const std::string& pRecord) {
+	slots = 1; 
+	pNextTask[passed] = nullptr; 
+	pNextTask[redirect] = nullptr; 
+	size_t pos = 0;
+	std::string token;
+	Utilities tokenExtract;
+	bool more = true;
+	for (int i = 0; more; i++) { 
+		token = tokenExtract.nextToken(pRecord, pos, more);
+		if (!token.empty()) {
+			switch (i) { 
+			case 0: 
+				name = token;
+				break;
+			case 1: 
+				if (more) {
+					slots = token;
+				}
+				break;
+			case 2: 
+				nextTask[passed] = token;
+				break;
+			case 3: 
+				nextTask[redirect] = token;
+				break;
+			}
+		}
+
+		if (field_width < tokenExtract.getFieldWidth()) {
+			field_width = tokenExtract.getFieldWidth();
+		}
+	}
+}
+
+bool Task::validate(const Task& task) {
+	if (task.name == nextTask[passed]) {
+		pNextTask[passed] = &task;
+	}
+	else if (task.name == nextTask[redirect]) {
+		pNextTask[redirect] = &task;
+	}
+	return (nextTask[passed].empty() || pNextTask[passed]) 
+		&& (nextTask[redirect].empty() || pNextTask[redirect]);
+}
+
+const std::string& Task::getName() const {
+		
+	return name;
+}
+
+void Task::display(std::ostream& os) const {
+	if (pNextTask[passed]) {
+		std::cout << "Task Name      :  " << std::setw(field_width + 3) << "[" + name + "]" << "[" + slots + "]" << std::endl;
+		std::cout << "  Continue to  :  " << std::setw(field_width + 3) << "[" + nextTask[passed] + "]" << std::endl;
+		if (!nextTask[redirect].empty()) {
+			std::cout << "  Redirect to  :  " << std::setw(field_width + 3) << "[" + nextTask[redirect] + "]" << std::endl;
+		}
+	}
+	else {
+		if (nextTask[passed].empty()) { 
+			std::cout << "Task Name      :  " << std::left << std::setw(field_width + 3) << "[" + name + "]" << "[1]" << std::endl;
+		}
+		else {
+			std::cout << "Task Name      :  " << std::left << std::setw(field_width + 3) << "[" + name + "]" << "[" + slots + "]" << "*** to be validated ***" << std::endl;
+			std::cout << "  Continue to  :  " << std::left << std::setw(field_width + 6) << "[" + nextTask[passed] + "]" << "*** to be validated ***" << std::endl;
+
+			if (!nextTask[redirect].empty()) {
+				std::cout << "  Redirect to  :  " << std::left << std::setw(field_width + 6) << "[" + nextTask[redirect] + "]" << "*** to be validated ***" << std::endl;
+
+			}
+		}
+	}
+}
+
+size_t Task::getFieldWidth() {
+	return field_width;
+}
+
+bool operator==(const Task& task_a, const Task& task_b) {
+		
+	return task_a.getName().compare(task_b.getName()) ? 0 : 1;
+}
+
+const Task* Task::getNextTask(Quality quantity) const {
+	int vi;
+	if (pNextTask[0] == nullptr) {
+		throw std::string("*** Validate [" + nextTask[passed] + "]  @  [" + name + "] ***");
+	}
+	switch (quantity) {
+	case 1:  
+		vi = passed;
+		break;
+	case 0:  
+		vi = redirect;
+		break;
+	}
+	return pNextTask[vi];
+}/*************************
+* OOP345 - Milestone 3
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 11, 2017
+*************************/
+
+#include <algorithm>
+#include <vector>
+#include "Task.h"
+#include "TaskManager.h"
+#include "ItemManager.h"
+
+void TaskManager::validate(std::ostream& os) 
+{
+	for (size_t i = 0; i < std::vector<Task>::size(); i++) 
+	{
+		for (size_t n = 0; n < std::vector<Task>::size(); n++) 
+		{
+			if (i != n) 
+			{
+				std::vector<Task>::at(i).validate(std::vector<Task>::at(n));
+			}
+		}
+	}
+}
+
+void TaskManager::validate(const ItemManager& itemManager, std::ostream& os) 
+{
+	int i = 0;
+	for (size_t i = 0; i < itemManager.size(); i++) 
+	{
+		for (size_t j = 0; j < std::vector<Task>::size(); j++) 
+		{
+			if (itemManager.at(i).getName() == std::vector<Task>::at(j).getName()) 
+			{ 
+				break; 
+			}
+			if (i == std::vector<Task>::size() - 1) 
+			{
+				os << itemManager.at(i).getName() << " is unavailable." << std::endl; 
+			}
+		}
+	}
+
+	for (size_t i = 0; i < itemManager.size(); i++) 
+	{
+		for (size_t j = 0; j < std::vector<Task>::size(); j++) 
+		{
+			if (itemManager.at(i).getRemover() == std::vector<Task>::at(j).getName()) 
+			{ 
+				break; 
+			} 
+			if (j == std::vector<Task>::size() - 1) 
+			{ 
+				os << itemManager.at(i).getRemover() << " is unavailable." << std::endl; 
+			}
+		}
+	}
+}
+
+void TaskManager::display(std::ostream& os) const 
+{
+	for (size_t i = 0; i < std::vector<Task>::size(); i++) 
+	{
+		std::vector<Task>::at(i).display(os);
+	}
+}/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 02, 2017
+*************************/
+
+#include <iostream>
+#include <string>
+#include <algorithm> 
+#include <functional> 
+#include <cctype>
+#include <locale>
+#include "Utilities.h"
+
+char Utilities::delimiter;
+std::ofstream Utilities::logFile;
+
+Utilities::Utilities() 
+{
+	field_width = 1;
+}
+
+void Utilities::setFieldWidth(size_t fw) 
+{
+	field_width = fw;
+}
+
+size_t Utilities::getFieldWidth() const 
+{
+	return this->field_width;
+}
+
+const std::string Utilities::nextToken(const std::string& str, size_t& next_pos, bool& more) 
+{
+	bool isValid = false;
+	std::string token;
+	try 
+	{
+		for (int i = next_pos; i < 1000; i++) 
+		{
+			if (str[0] == delimiter) 
+			{
+				if (str[i + 1] == delimiter) 
+				{ 
+					next_pos = i + 1;
+					throw std::string(str + "<-- *** no token found before the delimiter ***");
+				}
+				else 
+				{ 
+					field_width = str.size();
+					throw std::string(str + " <-- *** no token found before the delimiter ***");
+				}
+			}
+
+			if (str[i] == '\0') 
+			{ 
+				token = str.substr(next_pos, i - next_pos);
+				if (field_width < i - next_pos) 
+				{
+					field_width = i - next_pos;
+				}
+				more = false; 
+				break; 
+			}
+			else if (str[i] == delimiter) 
+			{
+				token = str.substr(next_pos, i - next_pos);
+				if (field_width < i - next_pos) 
+				{ 
+					field_width = i - next_pos;
+				}
+				next_pos = i + 1;
+				more = true; 
+				break; 
+			}
+		}
+
+		while (!isValid && !token.empty()) 
+		{ 
+			if (token.at(0) == ' ') { token.erase(0, 1); }
+			else if (token.back() == ' ') { token.erase(token.length() - 1, 1); }
+			else { isValid = true; }
+		}
+	}
+
+	catch (const std::string& msg) 
+	{
+		std::cout << msg << std::endl;
+		more = false;
+	}
+	return token; 
+}
+
+void Utilities::setDelimiter(const char pDelim) 
+{
+	Utilities::delimiter = pDelim;
+}
+
+void Utilities::setLogFile(const char* logfile) 
+{
+	logFile.close();
+	logFile.open(logfile);
+}
+
+std::ofstream& Utilities::getLogFile() 
+{
+	return logFile;
+}nesmaeili@matrix:~/oop345/milestones/m3> g++ -o m3 -std=c++0x m3.cpp Item.cpp CustomerOrder.cpp CustomerItem.cpp ItemManage r.cpp OrderManager.cpp Task.cpp TaskManager.cpp Utilities.cpp
+nesmaeili@matrix:~/oop345/milestones/m3> m3 CleanTask.dat CleanItem.dat CleanCustomerOrders \|
+Command Line Arguments
+----------------------
+Task File Specified           = CleanTask.dat
+Customer Order File Specified = CleanItem.dat
+Item File Specified           = CleanCustomerOrders
+File Record Field Delimiter   = |
+
+Building the Network of Tasks
+-----------------------------
+Task Name      :  [Power Supply]   [4]*** to be validated ***
+  Continue to  :  [Motherboard]      *** to be validated ***
+Task Name      :  [Motherboard]    [3]*** to be validated ***
+  Continue to  :  [CPU]               *** to be validated ***
+  Redirect to  :  [Remove CPU]       *** to be validated ***
+Task Name      :  [Remove CPU]     [1]*** to be validated ***
+  Continue to  :  [CPU ]             *** to be validated ***
+Task Name      :  [CPU]            [5]*** to be validated ***
+  Continue to  :  [Memory]            *** to be validated ***
+  Redirect to  :  [Remove CPU]       *** to be validated ***
+Task Name      :  [Remove CPU]     [1]*** to be validated ***
+  Continue to  :  [CPU]              *** to be validated ***
+Task Name      :  [Memory]         [4]*** to be validated ***
+  Continue to  :  [SSD]               *** to be validated ***
+  Redirect to  :  [Remove Memory]    *** to be validated ***
+Task Name      :  [Remove Memory]  [1]*** to be validated ***
+  Continue to  :  [Memory]           *** to be validated ***
+Task Name      :  [SSD]            [4]*** to be validated ***
+  Continue to  :  [GPU]               *** to be validated ***
+  Redirect to  :  [Remove SSD]       *** to be validated ***
+Task Name      :  [Remove SSD]     [1]*** to be validated ***
+  Continue to  :  [SSD]              *** to be validated ***
+Task Name      :  [GPU]            [3]*** to be validated ***
+  Continue to  :  [Test]             *** to be validated ***
+Task Name      :  [Test]           [4]*** to be validated ***
+  Continue to  :  [Approve]           *** to be validated ***
+  Redirect to  :  [Repair]           *** to be validated ***
+Task Name      :  [Repair]        [1]
+Task Name      :  [Approve]        [1]
+
+Validating the Set of Tasks
+---------------------------
+
+List of Accepted Tasks
+----------------------
+Task Name      :  [Power Supply]   [4]*** to be validated ***
+  Continue to  :  [Motherboard]      *** to be validated ***
+Task Name      :  [Motherboard]    [3]
+  Continue to  :  [CPU]            
+  Redirect to  :  [Remove CPU]    
+Task Name      :  [Remove CPU]     [1]*** to be validated ***
+  Continue to  :  [CPU ]             *** to be validated ***
+Task Name      :  [CPU]            [5]
+  Continue to  :  [Memory]         
+  Redirect to  :  [Remove CPU]    
+Task Name      :  [Remove CPU]     [1]*** to be validated ***
+  Continue to  :  [CPU]              *** to be validated ***
+Task Name      :  [Memory]         [4]
+  Continue to  :  [SSD]            
+  Redirect to  :  [Remove Memory] 
+Task Name      :  [Remove Memory]  [1]*** to be validated ***
+  Continue to  :  [Memory]           *** to be validated ***
+Task Name      :  [SSD]            [4]
+  Continue to  :  [GPU]            
+  Redirect to  :  [Remove SSD]    
+Task Name      :  [Remove SSD]     [1]*** to be validated ***
+  Continue to  :  [SSD]              *** to be validated ***
+Task Name      :  [GPU]            [3]*** to be validated ***
+  Continue to  :  [Test]             *** to be validated ***
+Task Name      :  [Test]           [4]
+  Continue to  :  [Approve]        
+  Redirect to  :  [Repair]        
+Task Name      :  [Repair]        [1]
+Task Name      :  [Approve]        [1]
+
+*** Load and Accept the Customer Orders ***
+
+List of Accepted Customer Orders
+--------------------------------
+CPU                      :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit
+Memory                   :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+GPU                      :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+Power Supply             :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+*** Load and accept the Items in Stock ***
+*** Cannot open file named CleanCustomerOrders ***
+nesmaeili@matrix:~/oop345/milestones/m3> m3 TaskList_Whitespace.dat ItemList_Malformed.dat ItemList_Whitespace.dat CustomerOrders_Whitespace.dat \ |
+Command Line Arguments
+----------------------
+Task File Specified           = TaskList_Whitespace.dat
+Customer Order File Specified = ItemList_Whitespace.dat
+Item File Specified           = CustomerOrders_Whitespace.dat
+File Record Field Delimiter   = |
+
+Building the Network of Tasks
+-----------------------------
+Task Name      :  [Power Supply]               [4]*** to be validated ***
+  Continue to  :  [Motherboard]                  *** to be validated ***
+Task Name      :  [Motherboard]                [3]*** to be validated ***
+  Continue to  :  [CPU]                           *** to be validated ***
+  Redirect to  :  [Remove CPU]                   *** to be validated ***
+Task Name      :  [Remove CPU]                 [1]*** to be validated ***
+  Continue to  :  [CPU           ]               *** to be validated ***
+Task Name      :  [CPU]                        [5]*** to be validated ***
+  Continue to  :  [Memory]                        *** to be validated ***
+  Redirect to  :  [Remove CPU]                   *** to be validated ***
+Task Name      :  [Remove CPU]                 [1]*** to be validated ***
+  Continue to  :  [CPU]                          *** to be validated ***
+Task Name      :  [Memory]                     [4]*** to be validated ***
+  Continue to  :  [SSD]                           *** to be validated ***
+  Redirect to  :  [Remove Memory]                *** to be validated ***
+Task Name      :  [Remove Memory]              [1]*** to be validated ***
+  Continue to  :  [Memory]                       *** to be validated ***
+Task Name      :  [SSD]                        [4]*** to be validated ***
+  Continue to  :  [GPU]                           *** to be validated ***
+  Redirect to  :  [Remove SSD]                   *** to be validated ***
+Task Name      :  [Remove SSD]                 [1]*** to be validated ***
+  Continue to  :  [SSD]                          *** to be validated ***
+Task Name      :  [GPU]                        [3]*** to be validated ***
+  Continue to  :  [Test]                         *** to be validated ***
+Task Name      :  [Test]                       [4]*** to be validated ***
+  Continue to  :  [Approve]                       *** to be validated ***
+  Redirect to  :  [Repair]                       *** to be validated ***
+Task Name      :  [Repair]                    [1]
+Task Name      :  [Approve]                    [1]
+
+Validating the Set of Tasks
+---------------------------
+
+List of Accepted Tasks
+----------------------
+Task Name      :  [Power Supply]               [4]*** to be validated ***
+  Continue to  :  [Motherboard]                  *** to be validated ***
+Task Name      :  [Motherboard]                [3]
+  Continue to  :  [CPU]                        
+  Redirect to  :  [Remove CPU]                
+Task Name      :  [Remove CPU]                 [1]*** to be validated ***
+  Continue to  :  [CPU           ]               *** to be validated ***
+Task Name      :  [CPU]                        [5]
+  Continue to  :  [Memory]                     
+  Redirect to  :  [Remove CPU]                
+Task Name      :  [Remove CPU]                 [1]*** to be validated ***
+  Continue to  :  [CPU]                          *** to be validated ***
+Task Name      :  [Memory]                     [4]
+  Continue to  :  [SSD]                        
+  Redirect to  :  [Remove Memory]             
+Task Name      :  [Remove Memory]              [1]*** to be validated ***
+  Continue to  :  [Memory]                       *** to be validated ***
+Task Name      :  [SSD]                        [4]
+  Continue to  :  [GPU]                        
+  Redirect to  :  [Remove SSD]                
+Task Name      :  [Remove SSD]                 [1]*** to be validated ***
+  Continue to  :  [SSD]                          *** to be validated ***
+Task Name      :  [GPU]                        [3]*** to be validated ***
+  Continue to  :  [Test]                         *** to be validated ***
+Task Name      :  [Test]                       [4]
+  Continue to  :  [Approve]                    
+  Redirect to  :  [Repair]                    
+Task Name      :  [Repair]                    [1]
+Task Name      :  [Approve]                    [1]
+
+*** Load and Accept the Customer Orders ***
+
+List of Accepted Customer Orders
+--------------------------------
+CPU                                    :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                 :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+GPU                                    :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+Power Supply                           :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+*** Load and accept the Items in Stock ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+
+List of In-Stock Items
+----------------------
+
+*** Fill the Customer Orders ***
+
+List of Processed Customer Orders
+---------------------------------
+CPU                                    :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                 :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+GPU                                    :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+Power Supply                           :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+Done!
+Press Enter Key to Exit ... 
+nesmaeili@matrix:~/oop345/milestones/m3> m3 MalformedTask.dat ItemList_Malformed.dat CustomerOrders_Malformed.dat \|
+Command Line Arguments
+----------------------
+Task File Specified           = MalformedTask.dat
+Customer Order File Specified = ItemList_Malformed.dat
+Item File Specified           = CustomerOrders_Malformed.dat
+File Record Field Delimiter   = |
+
+Building the Network of Tasks
+-----------------------------
+||<-- *** no token found before the delimiter ***
+|Remove SSD|1|SSD| <-- *** no token found before the delimiter ***
+Task Name      :  [Power Supply]                 [4]*** to be validated ***
+  Continue to  :  [Motherboard]                    *** to be validated ***
+Task Name      :  [Motherboard]                  [3]*** to be validated ***
+  Continue to  :  [CPU]                             *** to be validated ***
+  Redirect to  :  [Remove CPU]                     *** to be validated ***
+Task Name      :  [Remove CPU]                   [1]*** to be validated ***
+  Continue to  :  [CPU           ]                 *** to be validated ***
+Task Name      :  [CPU]                          [5]*** to be validated ***
+  Continue to  :  [Memory]                          *** to be validated ***
+  Redirect to  :  [Remove CPU]                     *** to be validated ***
+Task Name      :  [Remove CPU]                   [1]*** to be validated ***
+  Continue to  :  [CPU]                            *** to be validated ***
+Task Name      :  [Memory]                       [4]*** to be validated ***
+  Continue to  :  [SSD]                             *** to be validated ***
+  Redirect to  :  [Remove Memory]                  *** to be validated ***
+Task Name      :  [Remove Memory]                [1]*** to be validated ***
+  Continue to  :  [Memory]                         *** to be validated ***
+Task Name      :  [SSD]                          [4]*** to be validated ***
+  Continue to  :  [GPU]                             *** to be validated ***
+  Redirect to  :  [Remove SSD]                     *** to be validated ***
+Task Name      :  [Remove SSD]                   [1]*** to be validated ***
+  Continue to  :  [SSD]                            *** to be validated ***
+Task Name      :  [GPU]                          [3]*** to be validated ***
+  Continue to  :  [Test]                           *** to be validated ***
+Task Name      :  [Test]                         [4]*** to be validated ***
+  Continue to  :  [Approve]                         *** to be validated ***
+  Redirect to  :  [Repair]                         *** to be validated ***
+Task Name      :  [Test / 4 / Approve / Repair] [1]
+Task Name      :  [CPU]                          [5]*** to be validated ***
+  Continue to  :  [Memory]                          *** to be validated ***
+  Redirect to  :  [Remove CPU]                      *** to be validated ***
+Task Name      :  [4]                            [SSD]*** to be validated ***
+  Continue to  :  [GPU]                             *** to be validated ***
+  Redirect to  :  [Remove SSD]                     *** to be validated ***
+Task Name      :  [Repair]                      [1]
+Task Name      :  [Approve]                      [1]
+
+Validating the Set of Tasks
+---------------------------
+
+List of Accepted Tasks
+----------------------
+Task Name      :  [Power Supply]                 [4]*** to be validated ***
+  Continue to  :  [Motherboard]                    *** to be validated ***
+Task Name      :  [Motherboard]                  [3]
+  Continue to  :  [CPU]                          
+  Redirect to  :  [Remove CPU]                  
+Task Name      :  [Remove CPU]                   [1]*** to be validated ***
+  Continue to  :  [CPU           ]                 *** to be validated ***
+Task Name      :  [CPU]                          [5]
+  Continue to  :  [Memory]                       
+  Redirect to  :  [Remove CPU]                  
+Task Name      :  [Remove CPU]                   [1]*** to be validated ***
+  Continue to  :  [CPU]                            *** to be validated ***
+Task Name      :  [Memory]                       [4]
+  Continue to  :  [SSD]                          
+  Redirect to  :  [Remove Memory]               
+Task Name      :  [Remove Memory]                [1]*** to be validated ***
+  Continue to  :  [Memory]                         *** to be validated ***
+Task Name      :  [SSD]                          [4]
+  Continue to  :  [GPU]                          
+  Redirect to  :  [Remove SSD]                  
+Task Name      :  [Remove SSD]                   [1]*** to be validated ***
+  Continue to  :  [SSD]                            *** to be validated ***
+Task Name      :  [GPU]                          [3]*** to be validated ***
+  Continue to  :  [Test]                           *** to be validated ***
+Task Name      :  [Test]                         [4]
+  Continue to  :  [Approve]                      
+  Redirect to  :  [Repair]                      
+Task Name      :  [Test / 4 / Approve / Repair] [1]
+Task Name      :  [CPU]                          [5]
+  Continue to  :  [Memory]                       
+  Redirect to  :  [Remove CPU]                   
+Task Name      :  [4]                            [SSD]
+  Continue to  :  [GPU]                          
+  Redirect to  :  [Remove SSD]                  
+Task Name      :  [Repair]                      [1]
+Task Name      :  [Approve]                      [1]
+
+*** Load and Accept the Customer Orders ***
+||<-- *** no token found before the delimiter ***
+|Fan|Fan| Place fan       |900| CoolMasters R56||| <-- *** no token found before the delimiter ***
+||PCIe SSD|<-- *** no token found before the delimiter ***
+
+List of Accepted Customer Orders
+--------------------------------
+CPU                                                 :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                              :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+                                                    :  
+                                                    :  
+                                                    :  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+GPU                                                 :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+                                                    :  
+Power Supply                                        :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+*** Load and accept the Items in Stock ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+|||<-- *** no token found before the delimiter ***
+***No Token found before the delimiter ***
+| Peter McIntyre     | <-- *** no token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+
+List of In-Stock Items
+----------------------
+
+*** Fill the Customer Orders ***
+
+List of Processed Customer Orders
+---------------------------------
+CPU                                                 :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                              :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+                                                    :  
+                                                    :  
+                                                    :  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+GPU                                                 :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+                                                    :  
+Power Supply                                        :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+Done!
+Press Enter Key to Exit ... 
+nesmaeili@matrix:~/oop345/milestones/m3> exit
+exit
+
+Script done on Sun 13 Aug 2017 10:28:47 PM EDT

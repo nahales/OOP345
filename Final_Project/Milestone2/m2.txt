@@ -1,0 +1,676 @@
+Script started on Sun 13 Aug 2017 08:12:45 PM EDT
+nesmaeili@matrix:~/oop345/milestones/m2> whoami
+nesmaeili
+nesmaeili@matrix:~/oop345/milestones/m2> cat m2.cpp m[K[K[K[K[K[K[K[Km2.cpp Costu[K[K[K[KustomerOrder[K[K[K[K[K[K[K[K[K[K[K[K[KItem.cpp CustomerO[KItem.cpp Cu stomerOrder.cpp Utilities.cpp[K[K[K[K[K[K[K[K[K[K[K[K[KUtilities.cpp
+// CustomerOrder Milestone - Main Program
+// Milestone_2.cpp
+// Chris Szalwinski
+// v1.0 - 9/11/2015
+// v1.1 - 9/11/2015 - customerOrder -> customerOrders for g++ 5.2 compatability (CS)
+// v1.2 - 16/11/2015 - add <cstdlib> for exit (CS)
+// v2.0 - 15/01/2016
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <cstdlib>
+#include <vector>
+#include <memory>
+#include "CustomerOrder.h"
+#include "Utilities.h"
+#include "Item.h"
+
+template<typename T>
+void loadFromFile(const char*, std::vector<T>&, std::ostream&);
+
+int main(int argc, char** argv) {
+	// process command line arguments
+	if (argc != 4) {
+		std::cerr << "*** invalid number of arguments ***\n"
+			<< "Usage: " << argv[0] << " customer_order_file item_file delimiter\n";
+		exit(1);
+	}
+	std::cout << "Command Line Arguments\n----------------------\n";
+	std::cout << "Customer Order File Specified = " << argv[1] << "\n";
+	std::cout << "Item File Specified           = " << argv[2] << "\n";
+	std::cout << "File Record Field Delimiter   = " << argv[3][0] << "\n\n";
+	Utilities::setDelimiter(argv[3][0]);
+	// end of command line processing
+
+	// Load, Accept and Display the Customer Orders
+	//
+	std::cout << "\n*** Load and Accept the Customer Orders ***\n";
+	std::vector<CustomerOrder> customerOrders;
+	loadFromFile(argv[1], customerOrders, std::cerr);
+	std::cout << "\nList of Accepted Customer Orders\n--------------------------------\n";
+	for (auto& s : customerOrders)
+		s.display(std::cout);
+
+	// Load, Accept and Display the Items in Stock
+	//
+	std::cout << "\n*** Load and Accept the Items in Stock ***\n";
+	std::vector<Item> items;
+	loadFromFile(argv[2], items, std::cerr);
+	std::cout << "\nList of Items in Stock\n----------------------\n";
+	for (auto& i : items)
+		i.display(std::cout, true);
+
+	// Fill the Customer Orders with the Items in Stock
+	//
+	std::cout << "\n*** Process the Customer Orders ***\n";
+	for (auto& i : items)
+		for (auto& s : customerOrders)
+			s.fill(i);
+
+	// Display the Processed Customer Orders
+	//
+	std::cout << "\nList of Processed Customer Orders\n---------------------------------\n";
+	for (auto& s : customerOrders)
+		s.display(std::cout);
+
+	// Terminate
+	//
+	std::cout << "\nDone!\nPress Enter Key to Exit ... ";
+	char c;
+	std::cin.get(c);
+}
+
+template<typename T>
+void loadFromFile(const char* fileName, std::vector<T>& collection, std::ostream& os) {
+	std::ifstream file(fileName);
+	if (!file) {
+		os << "*** Cannot open file named " << fileName << " ***\n";
+		exit(1);
+	}
+	while (file) {
+		std::string record;
+		std::getline(file, record);
+		if (file) {
+			try {
+				std::unique_ptr<T> entry(new T(record));
+				if (!entry->empty())
+					collection.push_back(std::move(*entry));
+			}
+			catch (const std::string& msg) {
+				os << msg << std::endl;
+			}
+		}
+	}
+}/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 08, 2017
+*************************/
+
+#include <iostream>
+#include <iomanip>
+#include "Item.h"
+#include "Utilities.h"
+
+size_t Item::field_width;
+
+Item::Item(const std::string& item)
+	: description("no deatiled description"), 
+	code(1)
+{
+	Utilities tokenExtract;
+	size_t next_pos = 0;
+	bool more = true;
+	name = tokenExtract.nextToken(item, next_pos, more);
+
+	if (field_width < tokenExtract.getFieldWidth())
+	{
+		field_width = tokenExtract.getFieldWidth();
+	}
+
+	if (name.empty() || filler.empty() || remover.empty())
+	{
+		throw std::string("***No Token found before the delimiter ***");
+	}
+
+	try 
+	{
+		if (more) { filler = tokenExtract.nextToken(item, next_pos, more); }
+		if (more) { remover = tokenExtract.nextToken(item, next_pos, more); }
+		if (more) { code = stoi(tokenExtract.nextToken(item, next_pos, more)); }
+		if (more) { description = tokenExtract.nextToken(item, next_pos, more); }
+	}
+	catch (...) 
+	{
+		throw std::string(item + " <-- *** no token found before the delimiter ***");
+	}
+
+	if (name.empty() || filler.empty() || remover.empty()) 
+	{
+		throw std::string("***No Token found before the delimiter ***"); 
+	}
+}
+
+bool Item::empty() const 
+{
+	return (name == "") ? true : false;
+}
+
+Item& Item::operator++(int n) 
+{
+	code++;
+}
+
+unsigned int Item::getCode() const 
+{
+	return code;
+}
+
+const std::string& Item::getName() const 
+{
+	return name;
+}
+
+const std::string& Item::getFiller() const 
+{
+	return filler;
+}
+
+const std::string& Item::getRemover() const 
+{
+	return remover;
+}
+
+void Item::display(std::ostream& os, bool full) const 
+{
+	os << std::setfill(' ');
+	os << std::setw(field_width) << std::left << name << "[" << std::right << std::setw(CODE_WIDTH) << std::setfill('0') << code << "] From " <<
+		std::setw(field_width) << std::left << std::setfill(' ') << filler << " To " << remover << std::endl <<
+		std::setw(field_width + CODE_WIDTH + 3) << std::right << ": " << description << std::endl;
+}/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 08, 2017
+*************************/
+
+#include <iomanip>
+#include <iostream>
+#include "CustomerItem.h"
+#include "Item.h"
+
+CustomerItem::CustomerItem(const std::string& pName) 
+{
+	name = "";
+	if (!pName.empty()) 
+		name = pName;
+	filled = false; code = 0;
+}
+
+bool CustomerItem::asksFor(const Item& item) const 
+{
+	return name == item.getName() ? true : false;
+}
+
+bool CustomerItem::isFilled() const 
+{
+	return filled;
+}
+
+void CustomerItem::fill(const unsigned int fill) 
+{
+	code = fill; 
+	filled = true;
+}
+
+void CustomerItem::clear() 
+{
+	code = 0; 
+	filled = false;
+}
+
+const std::string& CustomerItem::getName() const 
+{
+	return name;
+}
+
+void CustomerItem::display(std::ostream& os) const 
+{
+	if (isFilled())
+		os << " + ";
+	else 
+		os << " - ";
+	os << "[" << std::setw(CODE_WIDTH) << std::setfill('0') << std::right << code << "]  " << name << std::endl;
+}
+/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 08, 2017
+*************************/
+
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+#include "CustomerOrder.h"
+#include "CustomerItem.h"
+#include "Item.h"
+#include "Utilities.h"
+
+size_t CustomerOrder::field_width;
+
+CustomerOrder::CustomerOrder(const std::string& custOrder) 
+{
+	nOrders = 0; 
+	order = nullptr;
+	Utilities TokenExtract;
+	std::vector<std::string> token;
+	size_t next_pos = 0;
+	bool more = true;
+	for (unsigned int counter = 0; more; counter++) 
+	{
+		name = TokenExtract.nextToken(custOrder, next_pos, more);
+
+		if (more)
+		{
+			product = TokenExtract.nextToken(custOrder, next_pos, more);
+		}
+
+		while (more)
+		{
+			token.push_back(TokenExtract.nextToken(custOrder, next_pos, more));
+		}
+		order = new CustomerItem[token.size()];
+
+		for (unsigned int i = 0; i < token.size(); i++)
+		{
+			order[i] = CustomerItem(token[i]);
+		}
+
+		if (field_width < TokenExtract.getFieldWidth())
+		{
+			field_width = TokenExtract.getFieldWidth();
+		}
+		nOrders = token.size();
+	}
+}
+
+CustomerOrder::CustomerOrder(const CustomerOrder& pCustOrder) 
+{
+	throw std::string("Test");
+}
+
+CustomerOrder::CustomerOrder(CustomerOrder&& pCustOrder) NOEXCEPT
+	: name(pCustOrder.name),
+	product(pCustOrder.product),
+	nOrders(pCustOrder.nOrders)
+{
+	order = new CustomerItem[nOrders];
+
+	for (unsigned int i = 0; i < nOrders; i++)
+	{
+		order[i] = pCustOrder.order[i];
+	}
+	pCustOrder.order = nullptr;
+	pCustOrder.name = ""; pCustOrder.product = ""; pCustOrder.nOrders = 0;
+}
+
+CustomerOrder&& CustomerOrder::operator=(CustomerOrder&& pCustOrder)NOEXCEPT 
+{
+	if (this != &pCustOrder)
+	{
+		delete[] order;
+		name = pCustOrder.name; product = pCustOrder.product; nOrders = pCustOrder.nOrders;
+		order = pCustOrder.order;
+		pCustOrder.order = nullptr;
+		pCustOrder.name = ""; pCustOrder.product = ""; pCustOrder.nOrders = 0;
+	}
+	return std::move(*this);
+}
+
+CustomerOrder::~CustomerOrder() 
+{
+	delete[] order;
+}
+
+bool CustomerOrder::empty() const 
+{
+	return (order == nullptr) ? true : false;
+}
+
+unsigned int CustomerOrder::noOrders() const
+{
+	return nOrders;
+}
+
+const std::string& CustomerOrder::operator[](unsigned int i) const
+{
+	try
+	{
+		std::string rName;
+		rName = order[i].getName();
+	}
+	catch (...)
+	{
+	}
+	return name;
+}
+
+void CustomerOrder::fill(Item& item)
+{
+	for (unsigned int i = 0; i < nOrders; i++)
+	{
+		if (order[i].asksFor(item))
+		{
+			order[i].fill(item.getCode());
+			item++;
+		}
+	}
+}
+
+void CustomerOrder::remove(Item& item)
+{
+	for (unsigned int i = 0; i < nOrders; i++)
+	{
+		if (order[i].getName() == item.getName())
+		{
+			nOrders--;
+		}
+	}
+}
+
+void CustomerOrder::display(std::ostream& os) const 
+{
+	os << std::setw(field_width) << std::setfill(' ') << std::left << name << " :  " << product << std::endl;
+
+	for (unsigned int i = 0; i < nOrders; i++)
+		order[i].display(os);
+}/*************************
+* OOP345 - Milestone 1
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 02, 2017
+*************************/
+
+#include <iostream>
+#include <string>
+#include <algorithm> 
+#include <functional> 
+#include <cctype>
+#include <locale>
+#include "Utilities.h"
+
+char Utilities::delimiter;
+std::ofstream Utilities::logFile;
+
+Utilities::Utilities() 
+{
+	field_width = 1;
+}
+
+void Utilities::setFieldWidth(size_t fw) 
+{
+	field_width = fw;
+}
+
+size_t Utilities::getFieldWidth() const 
+{
+	return this->field_width;
+}
+
+const std::string Utilities::nextToken(const std::string& str, size_t& next_pos, bool& more) 
+{
+	bool isValid = false;
+	std::string token;
+	try 
+	{
+		for (int i = next_pos; i < 1000; i++) 
+		{
+			if (str[0] == delimiter) 
+			{
+				if (str[i + 1] == delimiter) 
+				{ 
+					next_pos = i + 1;
+					throw std::string(str + "<-- *** no token found before the delimiter ***");
+				}
+				else 
+				{ 
+					field_width = str.size();
+					throw std::string(str + " <-- *** no token found before the delimiter ***");
+				}
+			}
+
+			if (str[i] == '\0') 
+			{ 
+				token = str.substr(next_pos, i - next_pos);
+				if (field_width < i - next_pos) 
+				{
+					field_width = i - next_pos;
+				}
+				more = false; 
+				break; 
+			}
+			else if (str[i] == delimiter) 
+			{
+				token = str.substr(next_pos, i - next_pos);
+				if (field_width < i - next_pos) 
+				{ 
+					field_width = i - next_pos;
+				}
+				next_pos = i + 1;
+				more = true; 
+				break; 
+			}
+		}
+
+		while (!isValid && !token.empty()) 
+		{ 
+			if (token.at(0) == ' ') { token.erase(0, 1); }
+			else if (token.back() == ' ') { token.erase(token.length() - 1, 1); }
+			else { isValid = true; }
+		}
+	}
+
+	catch (const std::string& msg) 
+	{
+		std::cout << msg << std::endl;
+		more = false;
+	}
+	return token; 
+}
+
+void Utilities::setDelimiter(const char pDelim) 
+{
+	Utilities::delimiter = pDelim;
+}
+
+void Utilities::setLogFile(const char* logfile) 
+{
+	logFile.close();
+	logFile.open(logfile);
+}
+
+std::ofstream& Utilities::getLogFile() 
+{
+	return logFile;
+}nesmaeili@matrix:~/oop345/milestones/m2> g++ m[K-o m2.cpp -std=c++0x [1P[1P[1P[1P[C[C[C[C[C[C[C[C[C[C[C[C m 2 . c p p [C I t e m . c p p [C C  [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cu  s t o m e r I t e m . c p p [C C [C[1P [K[1P [1P [1P [1P [1P [1P [1P [1P [1P [1P [1P [K[Anesmaeili@matrix:~/oop345/milestones/m2> g++ -o m2 -std=c++0x m2.cpp Item.cpp Custo m e r I t e m . c p p [C C u s t o m e r O r d e r . c p p [C U t i l i t i e s  [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C.  c p p [1P [1P [1P [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C  [K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[1P 
+[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cs  [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C.  c p p 
+nesmaeili@matrix:~/oop345/milestones/m2> m2 CleanItem.dat CleanCustomerOrders \ |[K[K|
+Command Line Arguments
+----------------------
+Customer Order File Specified = CleanItem.dat
+Item File Specified           = CleanCustomerOrders
+File Record Field Delimiter   = |
+
+
+*** Load and Accept the Customer Orders ***
+
+List of Accepted Customer Orders
+--------------------------------
+CPU                      :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit
+Memory                   :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+GPU                      :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+Power Supply             :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+*** Load and Accept the Items in Stock ***
+*** Cannot open file named CleanCustomerOrders ***
+nesmaeili@matrix:~/oop345/milestones/m2> m2 ItemList_Whitespace.dat CustomerOrders_Whitespace.dat \|
+Command Line Arguments
+----------------------
+Customer Order File Specified = ItemList_Whitespace.dat
+Item File Specified           = CustomerOrders_Whitespace.dat
+File Record Field Delimiter   = |
+
+
+*** Load and Accept the Customer Orders ***
+
+List of Accepted Customer Orders
+--------------------------------
+CPU                                    :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                 :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+GPU                                    :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+Power Supply                           :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+*** Load and Accept the Items in Stock ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+
+List of Items in Stock
+----------------------
+
+*** Process the Customer Orders ***
+
+List of Processed Customer Orders
+---------------------------------
+CPU                                    :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                 :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+GPU                                    :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+Power Supply                           :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+Done!
+Press Enter Key to Exit ... 
+nesmaeili@matrix:~/oop345/milestones/m2> m2 ItemList_Malformed.dat CustomerOrders_Malformed.dat \|
+Command Line Arguments
+----------------------
+Customer Order File Specified = ItemList_Malformed.dat
+Item File Specified           = CustomerOrders_Malformed.dat
+File Record Field Delimiter   = |
+
+
+*** Load and Accept the Customer Orders ***
+||<-- *** no token found before the delimiter ***
+|Fan|Fan| Place fan       |900| CoolMasters R56||| <-- *** no token found before the delimiter ***
+||PCIe SSD|<-- *** no token found before the delimiter ***
+
+List of Accepted Customer Orders
+--------------------------------
+CPU                                                 :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                              :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+                                                    :  
+                                                    :  
+                                                    :  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+GPU                                                 :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+                                                    :  
+Power Supply                                        :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+*** Load and Accept the Items in Stock ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+|||<-- *** no token found before the delimiter ***
+***No Token found before the delimiter ***
+| Peter McIntyre     | <-- *** no token found before the delimiter ***
+***No Token found before the delimiter ***
+***No Token found before the delimiter ***
+
+List of Items in Stock
+----------------------
+
+*** Process the Customer Orders ***
+
+List of Processed Customer Orders
+---------------------------------
+CPU                                                 :  CPU
+ - [00000]  Remove CPU
+ - [00000]  300
+ - [00000]  Central Processing Unit              
+Memory                                              :  Memory
+ - [00000]  Remove Memory
+ - [00000]  400
+ - [00000]  Samsung Memory Stick
+                                                    :  
+                                                    :  
+                                                    :  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+ - [00000]  
+GPU                                                 :  GPU
+ - [00000]  Remove GPU
+ - [00000]  500
+ - [00000]  Nvidia Geforce 750M
+                                                    :  
+Power Supply                                        :  Power Supply
+ - [00000]  Remove Power Supply
+ - [00000]  100
+ - [00000]  
+
+Done!
+Press Enter Key to Exit ... 
+nesmaeili@matrix:~/oop345/milestones/m2> exit
+exit
+
+Script done on Sun 13 Aug 2017 08:19:53 PM EDT
