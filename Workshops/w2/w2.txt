@@ -1,0 +1,270 @@
+Script started on Fri 11 Aug 2017 10:56:14 AM EDT
+nesmaeili@matrix:~/oop345/workshops/w2> whoami
+nesmaeili
+nesmaeili@matrix:~/oop345/workshops/w2> cat Station.h Station.cpp Stations.h Stations.cpp
+/*************************
+* OOP345 - Workshop 2
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#pragma once
+#include <string>
+#include <fstream>
+#include <iostream>
+
+namespace w2 {
+
+	enum PassType { PASS_STUDENT, PASS_ADULT, PASS_COUNT };
+
+	class Station {
+	private:
+		std::string stationName;
+		int stationPasses[PASS_COUNT];
+	public:
+		Station();
+		Station(std::fstream& fs); 
+		void set(const std::string&, unsigned, unsigned); 
+		void update(PassType, int); 
+		unsigned inStock(PassType) const; 
+		const std::string& getName() const; 
+	};
+}
+/*************************
+* OOP345 - Workshop 2
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#include <string>
+#include <fstream>
+#include <stdlib.h>
+#include "Station.h"
+
+namespace w2 {
+
+	Station::Station() {
+		stationName = "";
+		stationPasses[PASS_STUDENT] = 0;
+		stationPasses[PASS_ADULT] = 0;
+	}
+
+	Station::Station(std::fstream& fs) {
+		std::string name;
+		std::getline(fs, name, ';');
+		int s, a;
+		char c;
+		fs >> s;
+		fs >> a;
+		fs.get(c);
+		if (!(c == '\n' || c == '\r')) {
+			std::cerr << "expected a ->>\\n<<- and found a ->>" << c << "<<-\n";
+			exit(1);
+		}
+		set(name, s, a);
+	}
+
+	void Station::set(const std::string& name, unsigned student, unsigned adult) {
+		stationName = name;
+		stationPasses[PASS_STUDENT] = student;
+		stationPasses[PASS_ADULT] = adult;
+	}
+
+	void Station::update(PassType pt, int number) {
+		stationPasses[pt] += number;
+	}
+
+	unsigned Station::inStock(PassType pt) const {
+		return stationPasses[pt];
+	}
+
+	const std::string& Station::getName() const {
+		return stationName;
+	}
+}/*************************
+* OOP345 - Workshop 2
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#pragma once
+#include "Station.h"
+#include <fstream>
+
+namespace w2 {
+	class Stations {
+	private:
+		int stationsCount;
+		Station *stationsTable;
+		char* filename;
+	public:
+		Stations(char* filename);
+		~Stations();
+		void update() const;
+		void restock() const;
+		void report() const;
+	};
+}
+/*************************
+* OOP345 - Workshop 2
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#include <fstream>
+#include <iostream>
+#include <iomanip>
+#include <stdlib.h>
+#include "Stations.h"
+
+namespace w2 {
+
+	Stations::Stations(char* name) {
+		filename = name;
+		std::cout << "Stations(" << name << ")" << std::endl;
+		std::fstream fs(filename);
+		if (fs.is_open()) {
+			fs >> stationsCount;
+			std::cout << "Total Stations " << stationsCount << std::endl;
+			char c;
+			fs.get(c);
+			if (c != ';') {
+				std::cerr << "expected a ->>;<<- and found a ->>" << c << "<<-\n";
+				exit(1);
+			}
+			fs.get(c);
+			if (!(c == '\n' || c == '\r')) {
+				std::cerr << "expected a ->>\\n<<- and found a ->>" << c << "<<-\n";
+				exit(1);
+			}
+			stationsTable = new Station[stationsCount];
+			for (int i = 0; i < stationsCount; i++) {
+				stationsTable[i] = Station(fs);
+			}
+			fs.close();
+		}
+	}
+
+	Stations::~Stations() {
+		std::ofstream fs(filename);
+		if (fs.is_open()) {
+			fs << stationsCount << ";" << std::endl;
+			for (int i = 0; i < stationsCount; i++) {
+				fs << stationsTable[i].getName() << ";"
+					<< stationsTable[i].inStock(PASS_STUDENT) << " "
+					<< stationsTable[i].inStock(PASS_ADULT) << std::endl;
+			}
+		}
+		if (stationsTable) {
+			delete[]stationsTable;
+		}
+	}
+
+	void Stations::update() const {
+		std::cout << "\nPasses Sold :\n";
+		std::cout << "---------------:\n";
+		for (int i = 0; i < stationsCount; i++) {
+			int student, adult;
+			std::cout << stationsTable[i].getName() << "\n";
+			std::cout << "Student Passes sold : ";
+			std::cin >> student;
+			std::cout << "Adult Passes sold : ";
+			std::cin >> adult;
+			stationsTable[i].update(PASS_STUDENT, -student);
+			stationsTable[i].update(PASS_ADULT, -adult);
+		}
+	}
+
+	void Stations::restock() const {
+		std::cout << "\nPasses Added :\n";
+		std::cout << "---------------:\n";
+		for (int i = 0; i < stationsCount; i++) {
+			int student, adult;
+			std::cout << stationsTable[i].getName() << "\n";
+			std::cout << "Student Passes added : ";
+			std::cin >> student;
+			std::cout << "Adult Passes added : ";
+			std::cin >> adult;
+			stationsTable[i].update(PASS_STUDENT, student);
+			stationsTable[i].update(PASS_ADULT, adult);
+		}
+	}
+
+	void Stations::report() const {
+		//Passes in Stock : Student Adult
+		//	-------------------------------
+		//	Spadina               100   200
+		//	Bathurst              200   300
+		//	Keele                 100   100
+		//	Bay                   200   200
+		std::cout << "Passes in Stock : Student Adult\n";
+		std::cout << "-------------------------------\n";
+		for (int i = 0; i < stationsCount; i++) {
+			std::cout << std::left << std::setw(19) << stationsTable[i].getName();
+			std::cout << std::setw(6) << stationsTable[i].inStock(PASS_STUDENT);
+			std::cout << std::setw(6) << stationsTable[i].inStock(PASS_ADULT);
+			std::cout << "\n";
+		}
+	}
+}nesmaeili@matrix:~/oop345/workshops/w2> g++ -o w2 w2.cpp Station.cpp Stations.cpp
+nesmaeili@matrix:~/oop345/workshops/w2> w2 Stations.dat
+
+Command Line : w2 Stations.dat 
+Stations(Stations.dat)
+Total Stations 4
+
+Passes Sold :
+---------------:
+
+Spadina
+Student Passes sold : 5
+Adult Passes sold : 8
+
+Bathurst
+Student Passes sold : 34
+Adult Passes sold : 52
+
+Keele
+Student Passes sold : 21
+Adult Passes sold : 13
+
+Bay
+Student Passes sold : 67
+Adult Passes sold : 65
+
+Passes Added :
+---------------:
+
+Spadina
+Student Passes added : 29
+Adult Passes added : 52
+
+Bathurst
+Student Passes added : 113
+Adult Passes added : 61
+
+Keele
+Student Passes added : 51
+Adult Passes added : 52
+
+Bay
+Student Passes added : 109
+Adult Passes added : 107
+Passes in Stock : Student Adult
+-------------------------------
+
+Spadina           100   200   
+
+Bathurst          200   300   
+
+Keele             100   100   
+
+Bay               200   200   
+nesmaeili@matrix:~/oop345/workshops/w2> exit
+exit
+
+Script done on Fri 11 Aug 2017 10:58:38 AM EDT

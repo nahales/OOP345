@@ -1,0 +1,228 @@
+Script started on Sat 12 Aug 2017 04:27:03 PM EDT
+nesmaeili@matrix:~/oop345/workshops/w3> whoami
+nesmaeili
+nesmaeili@matrix:~/oop345/workshops/w3> cat w3 [K.cpp Text.h Text.cpp
+// Workshop 3 - Copy and Move Semantics
+// w3.cpp
+
+#include <iostream>
+#include <iomanip>
+#include <utility>
+#include <ctime>
+#include "Text.h"
+#define TIME(start, end) double((end) - (start)) / CLOCKS_PER_SEC
+
+int main(int argc, char* argv[]) {
+	if (argc == 1) {
+		std::cerr << argv[0] << ": missing file operand\n";
+		return 1;
+	}
+	else if (argc != 2) {
+		std::cerr << argv[0] << ": too many arguments\n";
+		return 2;
+	}
+	std::clock_t cs, ce;
+	{
+		cs = std::clock();
+		w3::Text b(argv[1]);
+
+		std::cout << std::fixed << std::setprecision(3);
+		cs = std::clock();
+		w3::Text a;
+		ce = std::clock();
+		std::cout << "Constructor      " << TIME(cs, ce) << " seconds";
+		std::cout << " - a.size = " << a.size() << std::endl;
+
+		
+		ce = std::clock();
+		std::cout << "Constructor      " << TIME(cs, ce) << " seconds";
+		std::cout << " - b.size = " << b.size() << std::endl;
+
+		cs = std::clock();
+		a = b;
+		ce = std::clock();
+		std::cout << "Copy Assignment  " << TIME(cs, ce) << " seconds";
+		std::cout << " - a.size = " << a.size() << std::endl;
+
+		cs = std::clock();
+		a = std::move(b);
+		ce = std::clock();
+		std::cout << "Move Assignment  " << TIME(cs, ce) << " seconds";
+		std::cout << " - a.size = " << a.size() << std::endl;
+
+		cs = std::clock();
+		w3::Text c = a;
+		ce = std::clock();
+		std::cout << "Copy Constructor " << TIME(cs, ce) << " seconds";
+		std::cout << " - c.size = " << c.size() << std::endl;
+
+		cs = std::clock();
+		w3::Text d = std::move(a);
+		ce = std::clock();
+		std::cout << "Move Constructor " << TIME(cs, ce) << " seconds";
+		std::cout << " - d.size = " << d.size() << std::endl;
+
+		cs = std::clock();
+	}
+	ce = std::clock();
+	std::cout << "Destructor       " << TIME(cs, ce) << " seconds\n\n";
+}#pragma once
+/*************************
+* OOP345 - Workshop 3
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#include <fstream>
+#include <iostream>
+#include <string>
+using namespace std;
+namespace w3 {
+
+	class Text {
+		size_t	lines; //C++14
+		std::string* lineTable; //C++14
+	public:
+		~Text();
+		Text();
+		Text(char* filename);
+		size_t size() const; //returns number of records of text data
+		Text& operator= (const Text& rhs); //C++98 copy assignment operator
+		Text&& operator= (Text&& rhs); //C++11 move assignment operator
+		Text(const Text& rhs); // C++98 copy ctor
+		Text(Text&& rhs); // C++11 move ctor
+	};
+} //namespace w3/*************************
+* OOP345 - Workshop 3
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+#include <fstream>
+#include "Text.h"
+
+using namespace w3;
+
+size_t	lines = 0;
+std::string* lineTable = nullptr;
+Text::~Text()
+{
+	delete[] lineTable;
+}
+
+Text::Text()
+	 
+{
+	lines = 0;
+	lineTable = nullptr;
+}
+
+Text::Text(char* filename)
+	: lines(0), lineTable(nullptr)
+{
+	std::fstream is(filename, std::ios::in);
+	if (is.is_open()) {
+		std::string line;
+		lines = 0;
+		while (getline(is, line, '\n'))
+			lines++;
+		std::cout << "\nFile '" << filename << "' contains " << lines << "\n";
+		lineTable = new std::string[lines];
+		is.clear(); //reset the EOF end-of-file flag
+		is.seekp(0);
+		for (int line = 0; line < lines; line++) {
+			getline(is, lineTable[line]);
+			auto cr = lineTable[line].find('\r');
+			if (cr != std::string::npos)
+				lineTable[line].erase(cr);
+		}
+		is.close();
+		//for our sanity, print out the first few lines of the file
+		int count = lines;
+		if (count > 10) count = 10;
+		for (int i = 0; i < count; i++) {
+			std::cout << "line " << i << ": '" << lineTable[i] << "'\n";
+		}
+		std::cout << "\n";
+	}
+	else {
+		std::cerr << "Cannot open file'" << filename << "'\n";
+	}
+}
+
+size_t Text::size() const
+{
+	return lines;
+}
+
+Text& Text::operator= (const Text& rhs) //C++98 copy assignment operator
+{
+	if (this != &rhs) {
+		delete[] lineTable;
+		//good practices after declere
+		lineTable = nullptr;
+		lines = 0;
+		if (rhs.lineTable) {
+			lines = rhs.lines;
+			lineTable = new std::string[lines];
+			for (int line = 0; line < lines; line++) {  //deep copy
+				lineTable[line] = rhs.lineTable[line];
+			}
+		}
+	}
+	return *this;
+}
+
+Text&& Text::operator= (Text&& rhs) //C++11 move assignment operator
+{
+	if (this != &rhs) {
+		delete[] lineTable;
+		//steal 'brains'
+		lines = rhs.lines;
+		lineTable = rhs.lineTable;
+		//'rhs' has no brains, turn it into a 'zombie'
+		rhs.lines = 0;
+		rhs.lineTable = nullptr;
+	}
+	return std::move(*this);
+}
+
+Text::Text(const Text& rhs) // C++98 copy ctor
+	: lines(0), lineTable(nullptr)
+{
+	*this = rhs;
+}
+
+Text::Text(Text&& rhs) // C++11 move ctor
+	: lines(0), lineTable(nullptr)
+{
+	*this = std::move(rhs);
+}nesmaeili@matrix:~/oop345/workshops/w3> g++ -o w3 -std=c++0x w3.cpp Text.h Text.cpp
+Text.h:1:9: warning: #pragma once in main file [enabled by default]
+nesmaeili@matrix:~/oop345/workshops/w3> w3 gutenberg_shakespeare.txt
+
+File 'gutenberg_shakespeare.txt' contains 124455
+line 0: 'This is the 100th Etext file presented by Project Gutenberg, and'
+line 1: 'is presented in cooperation with World Library, Inc., from their'
+line 2: 'Library of the Future and Shakespeare CDROMS.  Project Gutenberg'
+line 3: 'often releases Etexts that are NOT placed in the Public Domain!!'
+line 4: ''
+line 5: 'Shakespeare'
+line 6: ''
+line 7: '*This Etext has certain copyright implications you should read!*'
+line 8: ''
+line 9: '<<THIS ELECTRONIC VERSION OF THE COMPLETE WORKS OF WILLIAM'
+
+Constructor      0.000 seconds - a.size = 0
+Constructor      0.000 seconds - b.size = 124455
+Copy Assignment  0.010 seconds - a.size = 124455
+Move Assignment  0.010 seconds - a.size = 124455
+Copy Constructor 0.000 seconds - c.size = 124455
+Move Constructor 0.000 seconds - d.size = 124455
+Destructor       0.040 seconds
+
+nesmaeili@matrix:~/oop345/workshops/w3> exit
+exit
+
+Script done on Sat 12 Aug 2017 04:29:18 PM EDT

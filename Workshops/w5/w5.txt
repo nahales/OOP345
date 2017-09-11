@@ -1,0 +1,312 @@
+Script started on Sat 12 Aug 2017 11:07:05 PM EDT
+nesmaeili@matrix:~/oop345/workshops/w5> whoami
+nesmaeili
+nesmaeili@matrix:~/oop345/workshops/w5> cat w5.cpp Notifications.* Message.*
+// Workshop 5 - Containers
+// w5.cpp
+
+#include <iostream>
+#include <fstream>
+#include "Message.h"
+#include "Notifications.h"
+
+const char REC_DELIMITER = '\n';
+
+w5::Notifications collect(std::ifstream& in, char recDelim) {
+	w5::Notifications notifications;
+
+	do {
+		w5::Message message(in, recDelim);
+		if (!message.empty())
+			notifications += std::move(message);
+	} while (in);
+
+	return notifications;
+}
+
+int main(int argc, char* argv[]) {
+	if (argc == 1) {
+		std::cerr << argv[0] << ": missing file operand\n";
+		return 1;
+	}
+	else if (argc != 2) {
+		std::cerr << argv[0] << ": too many arguments\n";
+		return 2;
+	}
+	std::ifstream file(argv[1]);
+	if (!file) {
+		std::cerr << argv[0] << "\n: Failed to open " << argv[1] << "\n";
+		return 3;
+	}
+
+	std::cout << "\nNotifications\n=============\n\n";
+	w5::Notifications notifications = collect(file, REC_DELIMITER);
+
+	notifications.display(std::cout);
+
+	std::cout << "Press any key to continue ... ";
+	std::cin.get();
+}/*************************
+* OOP345 - Workshop 5
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+#include "Notifications.h"
+using namespace std;
+using namespace w5;
+
+Notifications::Notifications()
+{
+	notification = new char[1024];
+	num = 0;
+}
+
+Notifications::Notifications(const Notifications& noti)
+{
+	notification = new char[1024];
+	num = noti.num;
+	for (int i = 0; noti.notification[i] != '\0'; i++)
+		notification[i] = noti.notification[i];
+}
+
+Notifications& Notifications::operator=(const Notifications& noti)
+{
+	if (this == &noti)
+		return *this;
+	if (notification != NULL)
+	{
+		delete[]notification;
+		notification = NULL;
+	}
+	notification = new char[1024];
+	num = noti.num;
+	for (int i = 0; noti.notification[i] != '\0'; i++)
+		notification[i] = noti.notification[i];
+	return *this;
+}
+
+Notifications::Notifications(Notifications&& noti) :notification(noti.notification)
+{
+	noti.notification = NULL;
+	num = noti.num;
+}
+
+Notifications& Notifications::operator=(Notifications&& noti)
+{
+	auto notification = this->notification;
+	this->notification = noti.notification;
+	noti.notification = notification;
+	num = noti.num;
+	return *this;
+}
+
+
+Notifications::~Notifications()
+{
+	if (notification != NULL)
+		delete notification;
+}
+
+void Notifications::operator+=(const Message& msg)
+{
+	int index = 0;
+	if (num > 0)
+	{
+		notification[num] = '\n';
+		num++;
+	}
+	for (int i = 0; msg.message[i] != '\0'; i++)
+	{
+		notification[num + i] = msg.message[i];
+	}
+	num = num + msg.num;
+	notification[num] = '\0';
+}
+
+void Notifications::display(std::ostream& os) const
+{
+	os << notification << endl;
+}#pragma once
+/*************************
+* OOP345 - Workshop 5
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#include "Message.h"
+
+namespace w5
+{
+	class Notifications
+	{
+	public:
+		char *notification;
+		int num;
+		Notifications();
+		Notifications(const Notifications&);
+		Notifications& operator=(const Notifications&);
+		Notifications(Notifications&&);
+		Notifications& operator=(Notifications&&);
+		~Notifications();
+		void operator+=(const Message&);
+		void display(std::ostream&) const;
+	};
+}
+/*************************
+* OOP345 - Workshop 5
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+#include "Message.h"
+using namespace std;
+using namespace w5;
+
+char mess[] = "Message";
+char user[] = "User : ";
+char tweet[] = "Tweet: ";
+char reply[] = "Reply: ";
+
+Message::Message(std::ifstream &in, char c)
+{
+	message = new char[100];
+	char buff[100];
+	int flag1 = 0, flag2 = 0, index = 0, index1, count;
+	num = 0;
+	char temp;
+	temp = in.get();
+	while (temp != c && !in.eof())
+	{
+		if (temp == ' ') flag1 = 1;
+		if (temp == '@') flag2 = 1;
+		buff[index] = temp;
+		index++;
+		temp = in.get();
+	}
+	buff[index] = '\0';
+	if (flag1 == 0) return;
+	for (int i = 0; mess[i] != '\0'; i++) 
+	{
+		message[i] = mess[i];
+		num++;
+	}
+	message[num] = '\n';
+	num++;
+	for (count = 0; user[count] != '\0'; count++)
+	{
+		message[count + num] = user[count];
+	}
+	num += count;
+	count = 0;
+	for (index1 = 0; buff[index1] != ' '; index1++)
+	{
+		count++;
+		message[num + index1] = buff[index1];
+	}
+	num = num + count;
+	message[num] = '\n';
+	num++;
+	if (flag2 == 1)
+	{
+		int i = 0;
+		for (; reply[i] != '\0'; i++) 
+		{
+			message[num + i] = reply[i];
+		}
+		num = num + i;
+		index1 += 2;
+		for (i = 0; buff[index1] != ' '; index1++)
+		{
+			message[num + i] = buff[index1];
+			i++;
+		}
+		num = num + i;
+		message[num] = '\n';
+		num++;
+	}
+
+	for (index = 0; tweet[index] != '\0'; index++)
+	{
+		message[num + index] = tweet[index];
+	}
+	num += index;
+	count = 0;
+	index1++;
+	for (; buff[index1] != '\0'; index1++)
+	{
+		message[num + count] = buff[index1];
+		count++;
+	}
+	num += count;
+	message[num] = '\n';
+	message[++num] = '\0';
+}
+
+bool Message::empty() const
+{
+	return num == 0;
+}
+
+void Message::display(std::ostream &os) const
+{
+	os << message << endl;
+}
+
+Message::~Message()
+{
+	delete[]message;
+}#pragma once
+/*************************
+* OOP345 - Workshop 5
+* Author: Nahal Esmaeili
+* Prof: John Blair
+* August 10, 2017
+*************************/
+
+#include <iostream>
+#include <fstream>
+#include <string>
+
+namespace w5
+{
+	class Message
+	{
+	public:
+		char *message;
+		int num;
+		~Message();
+		Message(std::ifstream&, char);
+		bool empty() const;
+		void display(std::ostream&) const;
+	};
+}nesmaeili@matrix:~/oop345/workshops/w5> g++ -o w5 -std=c++0x w5.cpp Notifications.cpp Message.cpp
+nesmaeili@matrix:~/oop345/workshops/w5> w5 w5.dat
+
+Notifications
+=============
+
+Message
+User : jim
+Tweet: Workshop 5 is cool
+
+Message
+User : harry
+Reply: jim
+Tweet: working on workshop 5 now 
+
+Message
+User : dave
+Tweet: what the ^#$%!
+
+Message
+User : john
+Reply: harry
+Tweet: I'm done
+
+Press any key to continue ... 
+nesmaeili@matrix:~/oop345/workshops/w5> exit
+exit
+
+Script done on Sat 12 Aug 2017 11:08:52 PM EDT
